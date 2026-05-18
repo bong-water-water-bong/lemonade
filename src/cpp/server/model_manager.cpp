@@ -1412,6 +1412,20 @@ static bool check_component_downloaded(const ModelInfo& info,
     return true;
 }
 
+static bool is_valid_gguf_file_for_cache(const std::string& path) {
+    std::ifstream in(path_from_utf8(path), std::ios::binary);
+    if (!in.is_open()) {
+        return false;
+    }
+    char magic[4] = {};
+    in.read(magic, sizeof(magic));
+    return in.gcount() == static_cast<std::streamsize>(sizeof(magic)) &&
+           magic[0] == 'G' &&
+           magic[1] == 'G' &&
+           magic[2] == 'U' &&
+           magic[3] == 'F';
+}
+
 void ModelManager::build_cache() {
     std::lock_guard<std::mutex> lock(models_cache_mutex_);
 
@@ -1585,7 +1599,19 @@ void ModelManager::build_cache() {
                     has_partial = safe_exists(info.resolved_path() + ".partial");
                 }
 
-                info.downloaded = !has_manifest && !has_partial;
+                bool content_valid = true;
+                if (info.recipe == "llamacpp" &&
+                    !safe_is_directory(resolved) &&
+                    ends_with_ignore_case(info.resolved_path(), ".gguf")) {
+                    content_valid = is_valid_gguf_file_for_cache(info.resolved_path());
+                    if (!content_valid) {
+                        LOG(WARNING, "ModelManager")
+                            << "Invalid GGUF cache file; marking model as not downloaded: "
+                            << info.resolved_path() << std::endl;
+                    }
+                }
+
+                info.downloaded = content_valid && !has_manifest && !has_partial;
             } else {
                 info.downloaded = false;
             }
@@ -1714,7 +1740,19 @@ void ModelManager::add_model_to_cache(const std::string& model_name) {
                 has_partial = safe_exists(info.resolved_path() + ".partial");
             }
 
-            info.downloaded = !has_manifest && !has_partial;
+            bool content_valid = true;
+            if (info.recipe == "llamacpp" &&
+                !safe_is_directory(resolved) &&
+                ends_with_ignore_case(info.resolved_path(), ".gguf")) {
+                content_valid = is_valid_gguf_file_for_cache(info.resolved_path());
+                if (!content_valid) {
+                    LOG(WARNING, "ModelManager")
+                        << "Invalid GGUF cache file; marking model as not downloaded: "
+                        << info.resolved_path() << std::endl;
+                }
+            }
+
+            info.downloaded = content_valid && !has_manifest && !has_partial;
         } else {
             info.downloaded = false;
         }
@@ -2609,6 +2647,25 @@ void ModelManager::download_from_manifest(const json& manifest, std::map<std::st
     std::string download_path = manifest["download_path"].get<std::string>();
     int total_files = manifest["files_count"].get<int>();
 
+    auto ends_with_ignore_case_local = [](std::string value, std::string suffix) {
+        std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+        std::transform(suffix.begin(), suffix.end(), suffix.begin(), ::tolower);
+        return value.size() >= suffix.size() &&
+               value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+    };
+
+    auto has_gguf_magic = [](const std::string& path) {
+        std::ifstream in(path_from_utf8(path), std::ios::binary);
+        if (!in.is_open()) {
+            return false;
+        }
+        char magic[4] = {};
+        in.read(magic, sizeof(magic));
+        return in.gcount() == static_cast<std::streamsize>(sizeof(magic)) &&
+               magic[0] == 'G' && magic[1] == 'G' &&
+               magic[2] == 'U' && magic[3] == 'F';
+    };
+
     // Compute total download size across all files for accurate progress reporting
     size_t total_download_size = 0;
     for (const auto& file_desc : manifest["files"]) {
@@ -2717,6 +2774,27 @@ void ModelManager::download_from_manifest(const json& manifest, std::map<std::st
         // Detect bytes already on disk before downloading (for resume/skip tracking)
         size_t bytes_on_disk = 0;
         std::string partial_path = output_path + ".partial";
+
+        // GGUF models are consumed directly by llama-server. If a previous
+        // download accidentally saved an HTML/error/pointer file, the backend
+        // later fails with the unhelpful "llama-server failed to start".
+        // Reject that cache entry before HttpClient can treat the final path
+        // as already complete. SHA validation still remains the primary check
+        // when Hugging Face exposes an LFS object id.
+        if (ends_with_ignore_case_local(filename, ".gguf") &&
+            fs::exists(output_path) && !fs::exists(partial_path) &&
+            !has_gguf_magic(output_path)) {
+            LOG(WARNING, "ModelManager") << "Removing invalid GGUF cache file before download: "
+                                         << filename << std::endl;
+            std::error_code remove_ec;
+            fs::remove(path_from_utf8(output_path), remove_ec);
+            if (remove_ec) {
+                throw std::runtime_error(
+                    "Invalid GGUF cache file could not be removed: " + output_path +
+                    " (" + remove_ec.message() + ")");
+            }
+        }
+
         if (fs::exists(output_path) && !fs::exists(partial_path)) {
             bytes_on_disk = file_size;  // File already complete
         } else if (fs::exists(partial_path)) {
@@ -2731,6 +2809,18 @@ void ModelManager::download_from_manifest(const json& manifest, std::map<std::st
         download_opts.low_speed_limit = 1000;
         download_opts.low_speed_time = 60;
         download_opts.connect_timeout = 60;
+        if (file_desc.contains("hash") && file_desc["hash"].is_object()) {
+            const auto& hash = file_desc["hash"];
+            if (hash.contains("algorithm") && hash["algorithm"].is_string() &&
+                hash.contains("value") && hash["value"].is_string()) {
+                download_opts.expected_hash_algorithm = hash["algorithm"].get<std::string>();
+                download_opts.expected_hash = hash["value"].get<std::string>();
+            }
+        } else if (file_desc.contains("sha256") && file_desc["sha256"].is_string()) {
+            // Backward-compatible manifest shape for tests / hand-authored manifests.
+            download_opts.expected_hash_algorithm = "sha256";
+            download_opts.expected_hash = file_desc["sha256"].get<std::string>();
+        }
 
         // Create progress callback that reports to both console and SSE callback
         // Returns bool: true = continue, false = cancel
@@ -2847,6 +2937,23 @@ void ModelManager::download_from_manifest(const json& manifest, std::map<std::st
                             << ": tree API reports " << expected_size
                             << " bytes, actual " << actual_size << " bytes" << std::endl;
             }
+        }
+
+        // llama.cpp fails late and opaquely when a cached GGUF path points to
+        // an HTML/error/pointer file. Surface that as download validation
+        // failure instead, and remove the invalid final file so the next pull
+        // starts fresh.
+        if (ends_with_ignore_case_local(filename, ".gguf") && !has_gguf_magic(expected_path)) {
+            all_valid = false;
+            LOG(ERROR, "ModelManager") << "Invalid GGUF file: " << filename
+                                       << " (missing GGUF magic header)" << std::endl;
+            std::error_code remove_ec;
+            fs::remove(path_from_utf8(expected_path), remove_ec);
+            if (remove_ec) {
+                LOG(ERROR, "ModelManager") << "Failed to remove invalid GGUF file: "
+                                           << remove_ec.message() << std::endl;
+            }
+            continue;
         }
     }
 
@@ -3038,7 +3145,9 @@ void ModelManager::download_from_huggingface(const ModelInfo& info,
     // Create per-repo snapshot directories for non-main repos
     // Each repo gets its own HF-compatible cache structure
     std::map<std::string, std::string> repo_snapshot_paths;
+    std::map<std::string, std::string> repo_commit_hashes;
     repo_snapshot_paths[main_repo_id] = path_to_utf8(snapshot_path);
+    repo_commit_hashes[main_repo_id] = commit_hash;
 
     for (auto const& [repo_id, files] : files_to_download) {
         if (repo_id == main_repo_id || files.empty()) continue;
@@ -3069,6 +3178,7 @@ void ModelManager::download_from_huggingface(const ModelInfo& info,
         }
 
         repo_snapshot_paths[repo_id] = path_to_utf8(other_snapshot);
+        repo_commit_hashes[repo_id] = other_hash;
         LOG(INFO, "ModelManager") << "Created cache dir for " << repo_id
                     << " at " << path_to_utf8(other_snapshot) << std::endl;
     }
@@ -3077,8 +3187,12 @@ void ModelManager::download_from_huggingface(const ModelInfo& info,
     // This allows us to detect partially downloaded models
     std::string manifest_path = path_to_utf8(snapshot_path / ".download_manifest.json");
 
-    // Fetch file sizes from the tree API (the models API doesn't include sizes)
+    // Fetch file sizes and immutable content identifiers from the tree API.
+    // Hugging Face exposes LFS object ids as raw SHA256 hashes. For regular
+    // Git files, `oid` is a Git blob SHA1, so the downloader verifies
+    // SHA1("blob <size>\0" + file bytes) instead of a raw SHA1.
     std::map<std::string, size_t> file_sizes;
+    std::map<std::string, std::pair<std::string, std::string>> file_hashes;
 
     for (auto const& [repo_id, files] : files_to_download) {
         // Collect unique subdirectories that need recursive tree fetches
@@ -3092,8 +3206,9 @@ void ModelManager::download_from_huggingface(const ModelInfo& info,
             }
         }
 
+        std::string repo_commit = repo_commit_hashes.count(repo_id) ? repo_commit_hashes[repo_id] : "main";
         for (const auto& subdir : subdirs_to_fetch) {
-            std::string tree_url = "https://huggingface.co/api/models/" + repo_id + "/tree/main";
+            std::string tree_url = "https://huggingface.co/api/models/" + repo_id + "/tree/" + repo_commit;
             if (!subdir.empty()) {
                 tree_url += "/" + subdir;
             }
@@ -3106,13 +3221,24 @@ void ModelManager::download_from_huggingface(const ModelInfo& info,
                         if (file.contains("path") && file.contains("size")) {
                             std::string fpath = repo_id + ':' + file["path"].get<std::string>();
                             size_t fsize = file["size"].get<size_t>();
+                            if (file.contains("lfs") && file["lfs"].is_object() &&
+                                file["lfs"].contains("size") && file["lfs"]["size"].is_number()) {
+                                fsize = file["lfs"]["size"].get<size_t>();
+                            }
                             file_sizes[fpath] = fsize;
+
+                            if (file.contains("lfs") && file["lfs"].is_object() &&
+                                file["lfs"].contains("oid") && file["lfs"]["oid"].is_string()) {
+                                file_hashes[fpath] = {"sha256", file["lfs"]["oid"].get<std::string>()};
+                            } else if (file.contains("oid") && file["oid"].is_string()) {
+                                file_hashes[fpath] = {"git-sha1", file["oid"].get<std::string>()};
+                            }
                         }
                     }
                 }
             }
         }
-        LOG(INFO, "ModelManager") << "Retrieved file sizes for " << file_sizes.size() << " files" << std::endl;
+        LOG(INFO, "ModelManager") << "Retrieved file metadata for " << file_sizes.size() << " files" << std::endl;
     }
 
     // Create manifest with expected files (per-file download_path for multi-repo support)
@@ -3127,9 +3253,16 @@ void ModelManager::download_from_huggingface(const ModelInfo& info,
             json file_entry;
             std::string size_key = repo_id + ':' + filename;
             file_entry["name"] = filename;
-            file_entry["url"] = "https://huggingface.co/" + repo_id + "/resolve/main/" + filename;
+            std::string repo_commit = repo_commit_hashes.count(repo_id) ? repo_commit_hashes[repo_id] : "main";
+            file_entry["url"] = "https://huggingface.co/" + repo_id + "/resolve/" + repo_commit + "/" + filename;
             file_entry["size"] = file_sizes.count(size_key) ? file_sizes[size_key] : 0;
             file_entry["download_path"] = repo_snapshot_paths[repo_id];
+            if (file_hashes.count(size_key)) {
+                file_entry["hash"] = {
+                    {"algorithm", file_hashes[size_key].first},
+                    {"value", file_hashes[size_key].second}
+                };
+            }
             manifest["files"].push_back(file_entry);
         }
     }
