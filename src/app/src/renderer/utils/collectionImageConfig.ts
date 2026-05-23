@@ -1,12 +1,9 @@
-// Single source of truth for the fixed image size used by collection-mode
-// image tools. Drives:
-//   - the `size` field on /images/generations and /images/edits requests
-//   - the inline `height` on rendered collection images
-//   - the `{image_size}` placeholder in toolDefinitions.json descriptions
+// Default image size for collection-mode image tools and rendered image hints.
 //
-// 2:1 aspect ratio with 64-aligned dimensions for compatibility across
-// SD/SDXL/Flux variants. See SDServer::resolve_size for the server-side
-// passthrough.
+// Historically this was 512x256, which made Omni image replies look fixed to a
+// wide/short canvas and made missing tool arguments fall back to that shape.
+// The tool executor now resolves size from explicit tool args first and falls
+// back to a neutral square default.
 
 export const COLLECTION_IMAGE_SIZE = '512x256';
 

@@ -60,9 +60,12 @@ const tests = [
       const source = normalizeWhitespace(readSource(LEMONADE_TOOLS));
       const config = readSource(IMAGE_CONFIG);
       assertMatches(config, /export const COLLECTION_IMAGE_SIZE = '512x256'/, 'Current collection image size should be explicit.');
-      assertMatches(
-        source,
-        /prop\.description\.includes\('\{image_size\}'\)[\s\S]*?replaceAll\('\{image_size\}', COLLECTION_IMAGE_SIZE\)/,
+
+      const materializesImageSize = /prop\.description\.includes\('\{image_size\}'\)[\s\S]*?replaceAll\('\{image_size\}', COLLECTION_IMAGE_SIZE\)/.test(source)
+        || /prop\.description\.includes\('\{image_size\}'\)[\s\S]*?replace\(\s*\/\\\{image_size\\\}\/g\s*,\s*COLLECTION_IMAGE_SIZE\s*\)/.test(source);
+
+      assert.ok(
+        materializesImageSize,
         'Tool parameter descriptions should replace {image_size} at materialization time.',
       );
     },
