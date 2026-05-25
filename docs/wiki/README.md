@@ -11,3 +11,7 @@ For this project:
 - `openspec/` defines proposed and active structured changes.
 
 Keep wiki entries concise, factual, and linked back to concrete files, specs, or test evidence.
+
+## Entries
+
+- [Launchpad PPA CI](ci/launchpad-ppa.md)
