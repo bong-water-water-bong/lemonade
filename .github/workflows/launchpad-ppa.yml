@@ -207,6 +207,7 @@ jobs:
     with:
       target: ppa:lemonade-team/stable
       artifact: lemonade-${{ matrix.codename }}-source-package
+      allow_skip_without_gpg: ${{ github.event.repository.fork }}
     secrets: inherit
 
   upload-bleeding-edge:
@@ -221,4 +222,5 @@ jobs:
     with:
       target: ppa:lemonade-team/bleeding-edge
       artifact: lemonade-${{ matrix.codename }}-source-package
+      allow_skip_without_gpg: ${{ github.event.repository.fork }}
     secrets: inherit
