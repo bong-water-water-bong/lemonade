@@ -8,6 +8,10 @@ on:
       artifact:
         required: true
         type: string
+      allow_skip_without_gpg:
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,8 +26,14 @@ jobs:
         id: gpg-secret
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          ALLOW_SKIP_WITHOUT_GPG: ${{ inputs.allow_skip_without_gpg }}
         run: |
           if [ -z "$GPG_PRIVATE_KEY" ]; then
+            if [ "$ALLOW_SKIP_WITHOUT_GPG" != "true" ]; then
+              echo "::error::GPG_PRIVATE_KEY is required for PPA upload to ${{ inputs.target }}."
+              exit 1
+            fi
+
             echo "has_key=false" >> "$GITHUB_OUTPUT"
             echo "::notice::GPG_PRIVATE_KEY is not configured; skipping PPA upload to ${{ inputs.target }}."
             exit 0
