@@ -508,7 +508,7 @@ json SDServer::image_edits(const json& request) {
     if (request.contains("image_data")) {
         std::string image_binary = JsonUtils::base64_decode(
             request["image_data"].get<std::string>());
-        fields.push_back({"image[]", image_binary, "image.png", "image/png"});
+        fields.push_back({"image", image_binary, "image.png", "image/png"});
     }
     if (request.contains("mask_data")) {
         std::string mask_binary = JsonUtils::base64_decode(
@@ -546,7 +546,7 @@ json SDServer::image_variations(const json& request) {
     if (request.contains("image_data")) {
         std::string image_binary = JsonUtils::base64_decode(
             request["image_data"].get<std::string>());
-        fields.push_back({"image[]", image_binary, "image.png", "image/png"});
+        fields.push_back({"image", image_binary, "image.png", "image/png"});
     }
 
     LOG(DEBUG, "SDServer") << "Forwarding image variations to /v1/images/edits (multipart)"

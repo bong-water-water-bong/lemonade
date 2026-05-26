@@ -545,7 +545,102 @@ class StableDiffusionTests(ServerTestBase):
         self.assertTrue(decoded[:4] == b"\x89PNG", "Result should be a valid PNG")
         print(f"[OK] Image variations successful ({len(decoded)} bytes)")
 
-    def test_017_upscale_missing_image(self):
+    def test_017_generate_then_edit(self):
+        """Test end-to-end: generate an image, then edit it via /images/edits."""
+        # Step 1: Generate an image
+        gen_payload = {
+            "model": SD_MODEL,
+            "prompt": "A red circle",
+            "size": "256x256",
+            "steps": 2,
+            "n": 1,
+            "response_format": "b64_json",
+        }
+
+        print(f"[INFO] Generating image for generate-then-edit test")
+        gen_response = requests.post(
+            f"{self.base_url}/images/generations",
+            json=gen_payload,
+            timeout=TIMEOUT_MODEL_OPERATION,
+        )
+
+        self.assertEqual(
+            gen_response.status_code,
+            200,
+            f"Image generation failed: {gen_response.text}",
+        )
+
+        gen_result = gen_response.json()
+        b64_image = gen_result["data"][0]["b64_json"]
+
+        # Step 2: Edit the generated image
+        png_bytes = base64.b64decode(b64_image)
+        print(f"[INFO] Editing the generated image via /images/edits")
+
+        edit_response = requests.post(
+            f"{self.base_url}/images/edits",
+            files={"image": ("test.png", io.BytesIO(png_bytes), "image/png")},
+            data={
+                "model": SD_MODEL,
+                "prompt": "A blue circle",
+                "size": "256x256",
+                "n": "1",
+                "response_format": "b64_json",
+            },
+            timeout=TIMEOUT_MODEL_OPERATION,
+        )
+
+        self.assertEqual(
+            edit_response.status_code,
+            200,
+            f"Image edit failed with status {edit_response.status_code}: {edit_response.text}",
+        )
+
+        result = edit_response.json()
+        self.assertIn("data", result, "Response should contain 'data' field")
+        self.assertGreater(
+            len(result["data"]), 0, "Data should have at least one image"
+        )
+        b64_result = result["data"][0]["b64_json"]
+        decoded = base64.b64decode(b64_result)
+        self.assertTrue(decoded[:4] == b"\x89PNG", "Result should be a valid PNG")
+        print(f"[OK] Generate-then-edit successful ({len(decoded)} bytes)")
+
+    def test_018_image_edit_with_size(self):
+        """Test image edit with explicit size=128x128 parameter."""
+        png_bytes = create_minimal_png(128, 128)
+        print(f"[INFO] Sending image edit with size=128x128")
+
+        response = requests.post(
+            f"{self.base_url}/images/edits",
+            files={"image": ("test.png", io.BytesIO(png_bytes), "image/png")},
+            data={
+                "model": SD_MODEL,
+                "prompt": "A green square",
+                "size": "128x128",
+                "n": "1",
+                "response_format": "b64_json",
+            },
+            timeout=TIMEOUT_MODEL_OPERATION,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            f"Image edit with size failed: {response.status_code}: {response.text}",
+        )
+
+        result = response.json()
+        self.assertIn("data", result, "Response should contain 'data' field")
+        self.assertGreater(
+            len(result["data"]), 0, "Data should have at least one image"
+        )
+        b64_data = result["data"][0]["b64_json"]
+        decoded = base64.b64decode(b64_data)
+        self.assertTrue(decoded[:4] == b"\x89PNG", "Result should be a valid PNG")
+        print(f"[OK] Image edit with size=128x128 successful ({len(decoded)} bytes)")
+
+    def test_019_upscale_missing_image(self):
         """Test that /images/upscale returns 400 when image field is missing."""
         payload = {"model": ESRGAN_MODEL}
 
@@ -564,7 +659,7 @@ class StableDiffusionTests(ServerTestBase):
             f"[OK] Correctly rejected upscale request without image: {response.status_code}"
         )
 
-    def test_018_upscale_missing_model(self):
+    def test_020_upscale_missing_model(self):
         """Test that /images/upscale returns 400 when model field is missing."""
         png_bytes = create_minimal_png()
         b64_image = base64.b64encode(png_bytes).decode("utf-8")
@@ -585,7 +680,7 @@ class StableDiffusionTests(ServerTestBase):
             f"[OK] Correctly rejected upscale request without model: {response.status_code}"
         )
 
-    def test_019_upscale_invalid_model(self):
+    def test_021_upscale_invalid_model(self):
         """Test that /images/upscale returns 404 for an unknown model name."""
         png_bytes = create_minimal_png()
         b64_image = base64.b64encode(png_bytes).decode("utf-8")
@@ -606,7 +701,7 @@ class StableDiffusionTests(ServerTestBase):
             f"[OK] Correctly rejected upscale with invalid model: {response.status_code}"
         )
 
-    def test_020_upscale_basic(self):
+    def test_022_upscale_basic(self):
         """Test basic upscale: generate an image then upscale it."""
         # First generate an image
         gen_payload = {
