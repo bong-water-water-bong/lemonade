@@ -296,6 +296,9 @@ private:
 
     // Helper function to generate detailed model error responses (not found, not supported, load failure)
     nlohmann::json create_model_error(const std::string& requested_model, const std::string& exception_msg);
+    // Vision proxy - forwards requests to VisionServer backend
+    void handle_vision_proxy(const httplib::Request& req, httplib::Response& res);
+
     // System stats helper methods
     double get_cpu_usage();
     double get_gpu_usage();
@@ -336,6 +339,8 @@ private:
 
     std::string api_key_;
     std::string admin_api_key_;
+    std::string vision_host_;
+    int vision_port_ = 8787;
     NetworkBeacon udp_beacon_;
 
     // CPU usage tracking
