@@ -199,6 +199,23 @@ Server::Server(std::shared_ptr<RuntimeConfig> config, const std::string& cache_d
         admin_api_key_ = api_key_;
     }
 
+    // Read vision server URL from environment, default to localhost:8787
+    const char* vision_url_env = std::getenv("LEMONADE_VISION_URL");
+    std::string vision_url = vision_url_env ? std::string(vision_url_env) : "http://127.0.0.1:8787";
+    size_t scheme_end = vision_url.find("://");
+    if (scheme_end != std::string::npos) {
+        std::string host_port = vision_url.substr(scheme_end + 3);
+        size_t colon_pos = host_port.find(':');
+        size_t slash_pos = host_port.find('/');
+        if (colon_pos != std::string::npos) {
+            vision_host_ = host_port.substr(0, colon_pos);
+            size_t port_end = slash_pos != std::string::npos ? slash_pos : host_port.length();
+            vision_port_ = std::stoi(host_port.substr(colon_pos + 1, port_end - colon_pos - 1));
+        } else {
+            vision_host_ = host_port.substr(0, slash_pos);
+        }
+    }
+
     setup_http_servers();
 
     // Initialize WebSocket server for realtime API and log streaming
@@ -547,6 +564,19 @@ void Server::setup_routes(httplib::Server &web_server) {
         LOG(INFO, "Server") << "TEST POST endpoint hit!" << std::endl;
         res.set_content("{\"test\": \"ok\"}", "application/json");
     });
+
+    // Vision proxy routes (forward to VisionServer backend)
+    // Registered under all 4 path prefixes with wildcard sub-path capture
+    auto vision_handler = [this](const httplib::Request& req, httplib::Response& res) {
+        handle_vision_proxy(req, res);
+    };
+    for (std::string prefix : {"/api/v0/vision/", "/api/v1/vision/", "/v0/vision/", "/v1/vision/"}) {
+        std::string pattern = prefix + "(.*)";
+        web_server.Get(pattern, vision_handler);
+        web_server.Post(pattern, vision_handler);
+        web_server.Delete(pattern, vision_handler);
+        web_server.Patch(pattern, vision_handler);
+    }
 
     // Register Ollama-compatible API routes
     auto ollama_api = std::make_shared<OllamaApi>(router_.get(), model_manager_.get());
@@ -3934,6 +3964,71 @@ void Server::handle_shutdown(const httplib::Request& req, httplib::Response& res
         stop();
         std::exit(0);
     }).detach();
+}
+
+void Server::handle_vision_proxy(const httplib::Request& req, httplib::Response& res) {
+    const std::vector<std::string> prefixes = {
+        "/api/v0/vision/", "/api/v1/vision/", "/v0/vision/", "/v1/vision/"
+    };
+
+    std::string sub_path;
+    for (const auto& prefix : prefixes) {
+        if (req.path.rfind(prefix, 0) == 0) {
+            sub_path = req.path.substr(prefix.length());
+            break;
+        }
+    }
+
+    std::string target_path = "/" + sub_path;
+
+    httplib::Client vision_client(vision_host_, vision_port_);
+    vision_client.set_connection_timeout(30);
+    vision_client.set_read_timeout(30);
+
+    httplib::Headers forward_headers;
+    if (req.has_header("Content-Type")) {
+        forward_headers.emplace("Content-Type", req.get_header_value("Content-Type"));
+    }
+    if (req.has_header("X-Session-Token")) {
+        forward_headers.emplace("X-Session-Token", req.get_header_value("X-Session-Token"));
+    }
+
+    std::string content_type = req.has_header("Content-Type")
+        ? req.get_header_value("Content-Type") : "application/json";
+
+    httplib::Result result;
+    if (req.method == "GET") {
+        result = vision_client.Get(target_path.c_str(), forward_headers);
+    } else if (req.method == "POST") {
+        result = vision_client.Post(target_path.c_str(), forward_headers, req.body, content_type.c_str());
+    } else if (req.method == "DELETE") {
+        result = vision_client.Delete(target_path.c_str(), forward_headers, req.body, content_type.c_str());
+    } else if (req.method == "PATCH") {
+        result = vision_client.Patch(target_path.c_str(), forward_headers, req.body, content_type.c_str());
+    } else {
+        res.status = 405;
+        res.set_content("{\"error\": \"Method not allowed for vision proxy\"}", "application/json");
+        return;
+    }
+
+    if (result) {
+        res.status = result->status;
+        std::string response_content_type = "application/json";
+        if (result->has_header("Content-Type")) {
+            response_content_type = result->get_header_value("Content-Type");
+        }
+        res.set_content(result->body, response_content_type.c_str());
+    } else {
+        LOG(ERROR, "Server") << "Vision proxy error connecting to " << vision_host_ << ":"
+                             << vision_port_ << " - " << httplib::to_string(result.error()) << std::endl;
+        res.status = 502;
+        nlohmann::json error_resp = {
+            {"error", {{"message", "Vision server unreachable"},
+                       {"code", "vision_proxy_error"},
+                       {"type", "server_error"}}}
+        };
+        res.set_content(error_resp.dump(), "application/json");
+    }
 }
 
 void Server::handle_config_set(const httplib::Request& req, httplib::Response& res) {

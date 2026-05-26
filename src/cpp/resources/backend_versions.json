@@ -78,6 +78,9 @@
     "cpu": "b17",
     "metal": "b17"
   },
+  "vision-server": {
+    "cpu": "0.1.0"
+  },
   "vllm": {
     "rocm": "vllm0.20.1-rocm7.12.0"
   },
