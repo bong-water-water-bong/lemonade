@@ -3702,6 +3702,71 @@ void ModelManager::delete_model(const std::string& model_name) {
     remove_model_from_cache(canonical_model_name);
 }
 
+// Scan a single models--* cache directory for orphaned blob files.
+// An orphaned blob is a file in blobs/ that is not referenced by any symlink
+// in the snapshots/ directory tree.
+static void scan_repo_for_orphaned_blobs(const fs::path& repo_cache_dir,
+                                          json& orphaned_files,
+                                          size_t& total_bytes,
+                                          bool dry_run,
+                                          const std::string& cache_dir_str) {
+    std::error_code ec;
+
+    // Walk all snapshots to collect referenced blob hashes
+    std::unordered_set<std::string> referenced_blobs;
+    fs::path snapshots_dir = repo_cache_dir / "snapshots";
+    if (fs::exists(snapshots_dir, ec) && !ec) {
+        for (auto& entry : fs::recursive_directory_iterator(snapshots_dir, ec)) {
+            if (ec) break;
+            if (!fs::is_symlink(entry.path(), ec) || ec) continue;
+
+            fs::path link_target = fs::read_symlink(entry.path(), ec);
+            if (ec) continue;
+
+            std::string blob_hash = link_target.filename().string();
+            if (!blob_hash.empty()) {
+                referenced_blobs.insert(blob_hash);
+            }
+        }
+    }
+
+    // Walk blobs/ directory to find orphaned blobs
+    fs::path blobs_dir = repo_cache_dir / "blobs";
+    if (!fs::exists(blobs_dir, ec) || ec) return;
+
+    for (auto& entry : fs::directory_iterator(blobs_dir, ec)) {
+        if (ec) break;
+        if (!entry.is_regular_file()) continue;
+
+        std::string blob_hash = entry.path().filename().string();
+        if (referenced_blobs.find(blob_hash) != referenced_blobs.end()) continue;
+
+        // This blob is not referenced by any symlink — it's orphaned
+        size_t file_size = entry.file_size();
+        std::string file_path = path_to_utf8(entry.path());
+
+        orphaned_files.push_back({
+            {"path", file_path},
+            {"size", file_size},
+            {"cache_dir", cache_dir_str}
+        });
+        total_bytes += file_size;
+
+        if (!dry_run) {
+            LOG(INFO, "ModelManager") << "Removing orphaned blob: " << file_path << std::endl;
+            fs::remove(entry.path(), ec);
+        }
+    }
+
+    // Clean up empty blobs/ directory after removals
+    if (!dry_run && fs::exists(blobs_dir)) {
+        fs::is_empty(blobs_dir, ec);
+        if (!ec) {
+            fs::remove(blobs_dir, ec);
+        }
+    }
+}
+
 json ModelManager::cleanup_orphaned_cache(bool dry_run) {
     build_cache();
 
@@ -3711,6 +3776,7 @@ json ModelManager::cleanup_orphaned_cache(bool dry_run) {
 
     std::lock_guard<std::mutex> lock(models_cache_mutex_);
 
+    // --- Part 1: Multi-repo model orphan detection ---
     // Find multi-repo models where non-main checkpoints reference different repos
     for (const auto& [name, info] : models_cache_) {
         if (info.checkpoints.size() <= 1) continue;
@@ -3764,13 +3830,63 @@ json ModelManager::cleanup_orphaned_cache(bool dry_run) {
         }
     }
 
+    // --- Part 2: Scan for orphaned blobs across all known repos ---
+    // Collect all known cache directories (deduplicated by path)
+    std::set<std::string> known_cache_dirs;
+    for (const auto& [name, info] : models_cache_) {
+        for (const auto& [type, checkpoint] : info.checkpoints) {
+            if (checkpoint.empty()) continue;
+            std::string repo = checkpoint_to_repo_id(checkpoint);
+            known_cache_dirs.insert(hf_cache + "/" + repo_id_to_cache_dir_name(repo));
+        }
+    }
+
+    for (const auto& cache_dir_str : known_cache_dirs) {
+        fs::path cache_dir = path_from_utf8(cache_dir_str);
+        if (fs::exists(cache_dir)) {
+            scan_repo_for_orphaned_blobs(cache_dir, orphaned_files, total_bytes, dry_run, cache_dir_str);
+        }
+    }
+
+    // --- Part 3: Report unknown cache directories ---
+    json orphaned_dirs = json::array();
+    fs::path hf_cache_path = path_from_utf8(hf_cache);
+    std::error_code ec;
+    if (fs::exists(hf_cache_path, ec) && !ec) {
+        for (auto& entry : fs::directory_iterator(hf_cache_path, ec)) {
+            if (ec) break;
+            if (!entry.is_directory()) continue;
+
+            std::string dirname = entry.path().filename().string();
+            if (dirname.find("models--") != 0) continue;
+
+            std::string dir_path = path_to_utf8(entry.path());
+            if (known_cache_dirs.find(dir_path) == known_cache_dirs.end()) {
+                orphaned_dirs.push_back({
+                    {"path", dir_path},
+                    {"note", "Cache directory not associated with any known model"}
+                });
+
+                // Safe cleanup: remove only if the directory is empty
+                if (!dry_run && fs::is_empty(entry.path(), ec) && !ec) {
+                    LOG(INFO, "ModelManager") << "Removing empty unknown cache directory: " << dir_path << std::endl;
+                    fs::remove(entry.path(), ec);
+                }
+            }
+        }
+    }
+
     json result;
     result["orphaned_files"] = orphaned_files;
+    if (!orphaned_dirs.empty()) {
+        result["orphaned_dirs"] = orphaned_dirs;
+    }
     result["total_bytes"] = total_bytes;
     result["dry_run"] = dry_run;
 
-    LOG(INFO, "ModelManager") << "Cache cleanup: found " << orphaned_files.size()
-                << " orphaned file(s), " << (total_bytes / (1024 * 1024)) << " MB"
+    size_t total_items = orphaned_files.size() + orphaned_dirs.size();
+    LOG(INFO, "ModelManager") << "Cache cleanup: found " << total_items
+                << " orphaned item(s), " << (total_bytes / (1024 * 1024)) << " MB"
                 << (dry_run ? " (dry run)" : " (deleted)") << std::endl;
 
     return result;
