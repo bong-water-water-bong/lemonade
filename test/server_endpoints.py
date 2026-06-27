@@ -3267,6 +3267,10 @@ class EndpointTests(ServerTestBase):
                 return f.read().strip()
         return None
 
+    @unittest.skipUnless(
+        os.environ.get("LEMONADE_INTEGRATION_TESTS") == "1",
+        "Skipped: set LEMONADE_INTEGRATION_TESTS=1 to run live HuggingFace tests",
+    )
     def test_034_pull_resumes_interrupted_snapshot_across_commit_change(self):
         """An interrupted download whose snapshot sits under a stale commit hash
         is migrated forward to the current hash and resumed in place, not
@@ -3309,6 +3313,7 @@ class EndpointTests(ServerTestBase):
 
         fake_old = "0" * 40
         old_snapshot = os.path.join(snapshots_dir, fake_old)
+        self.addCleanup(shutil.rmtree, old_snapshot, ignore_errors=True)
         # Clear any leftover fake dir from a previously interrupted run so the
         # rename below starts clean.
         if os.path.isdir(old_snapshot):
@@ -3370,6 +3375,10 @@ class EndpointTests(ServerTestBase):
             ):
                 os.rename(old_snapshot, os.path.join(snapshots_dir, real_hash))
 
+    @unittest.skipUnless(
+        os.environ.get("LEMONADE_INTEGRATION_TESTS") == "1",
+        "Skipped: set LEMONADE_INTEGRATION_TESTS=1 to run live HuggingFace tests",
+    )
     def test_035_pull_does_not_migrate_completed_stale_snapshot(self):
         """A *completed* snapshot under a stale hash (no .download_manifest.json
         marker) is NOT migrated by the resume path — only genuinely interrupted
@@ -3392,6 +3401,7 @@ class EndpointTests(ServerTestBase):
 
         fake_old = "1" * 40
         old_snapshot = os.path.join(snapshots_dir, fake_old)
+        self.addCleanup(shutil.rmtree, old_snapshot, ignore_errors=True)
 
         # Completed snapshot under a stale hash: copy the files, strip any
         # manifest/partial, leave the real snapshot in place.

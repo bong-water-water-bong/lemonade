@@ -4339,6 +4339,7 @@ static void resume_snapshot_across_commit(const fs::path& cache_path,
     std::error_code ec;
     for (const auto& entry : fs::directory_iterator(snapshots_dir, safe_dir_options, ec)) {
         if (ec) break;
+        if (fs::is_symlink(entry.path())) continue;
         if (!safe_is_directory(entry.path())) continue;
         if (entry.path().filename() == new_hash) continue;
         if (safe_exists(entry.path() / ".download_manifest.json")) {
