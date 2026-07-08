@@ -440,6 +440,17 @@ void LlamaCppServer::load(const std::string& model_name,
 
         env_vars.push_back({"LD_LIBRARY_PATH", lib_path});
         LOG(DEBUG, "LlamaCpp") << "Setting LD_LIBRARY_PATH=" << lib_path << std::endl;
+
+        // On hybrid AMD+NVIDIA systems, ROCm-linked llama.cpp can see NVIDIA
+        // GPUs through the bundled CUDA runtime and attempt to allocate on them,
+        // causing cudaMalloc OOM crashes. Hide NVIDIA GPUs when ROCm is the
+        // selected backend.
+        // See: https://github.com/lemonade-sdk/lemonade/issues/2074
+        const char* existing_cuda_visible = std::getenv("CUDA_VISIBLE_DEVICES");
+        if (!existing_cuda_visible || existing_cuda_visible[0] == '\0') {
+            env_vars.push_back({"CUDA_VISIBLE_DEVICES", ""});
+            LOG(INFO, "LlamaCpp") << "Hiding NVIDIA GPUs from ROCm backend to prevent cross-vendor allocation" << std::endl;
+        }
     } else if (is_llamacpp_cuda_backend(llamacpp_backend)) {
         // The llama.cpp-builds Linux tarballs ship the bundled CUDA runtime
         // (libcudart.so, libcublas.so, etc.) alongside llama-server, so add the
