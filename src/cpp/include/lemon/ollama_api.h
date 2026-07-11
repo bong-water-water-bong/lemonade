@@ -41,7 +41,10 @@ private:
     void register_anthropic_routes(httplib::Server& server, const std::shared_ptr<OllamaApi>& self);
 
     // Helpers
-    void auto_load_model(const std::string& model);
+    // Auto-load a model if not already loaded.
+    // If request_body is provided, ctx_size and other per-request options are forwarded
+    // to the model loading phase instead of using recipe defaults.
+    void auto_load_model(const std::string& model, const nlohmann::json& request_body = nlohmann::json::object());
     std::string normalize_model_name(const std::string& name);
     json build_ollama_model_entry(const std::string& id, const ModelInfo& info);
     json convert_openai_chat_to_ollama(const json& openai_response, const std::string& model);

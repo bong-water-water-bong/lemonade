@@ -249,7 +249,9 @@ private:
                                   nlohmann::json& out);
 
     // Helper function for auto-loading models (eliminates code duplication and race conditions)
-    void auto_load_model_if_needed(const std::string& model_name);
+    // If request_body is provided, ctx_size and other per-request options are forwarded
+    // to the model loading phase instead of using recipe defaults.
+    void auto_load_model_if_needed(const std::string& model_name, const nlohmann::json& request_body = nlohmann::json::object());
 
     // Helper: persist the registry's installed-providers list into config.json
     // by overlaying onto the current runtime-config snapshot. Called after
