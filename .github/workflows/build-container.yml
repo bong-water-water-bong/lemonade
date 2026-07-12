@@ -7,6 +7,8 @@ on:
 
 jobs:
   build-container:
+    # Only publish from the upstream repo; forks can't push to ghcr.io/lemonade-sdk.
+    if: github.repository == 'lemonade-sdk/lemonade'
     runs-on: ubuntu-latest
     strategy:
       matrix:
