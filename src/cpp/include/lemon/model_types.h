@@ -127,13 +127,11 @@ inline std::string device_type_to_string(DeviceType device) {
 // "chat-transcription" is an LLM input-modality label and does not change the
 // deployment mode.
 inline ModelType get_model_type_from_labels(const std::vector<std::string>& labels) {
-    for (const auto& label : labels) {
-        if (label == "vision" || label == "reasoning" ||
-            label == "tool-calling" || label == "tools" ||
-            label == "chat-transcription") {
-            return ModelType::LLM;
-        }
-    }
+    // Capability labels (e.g., "vision", "reasoning") take lower priority than
+    // deployment-mode labels like "embeddings" or "reranking".  A multimodal
+    // embedding model such as UNITE carries both "embeddings" and "vision" — it
+    // should be deployed as an EMBEDDING backend (which passes --embeddings to
+    // llama-server), not as an LLM chat backend.
     for (const auto& label : labels) {
         if (label == "embeddings" || label == "embedding") {
             return ModelType::EMBEDDING;
@@ -158,6 +156,13 @@ inline ModelType get_model_type_from_labels(const std::vector<std::string>& labe
         }
         if (label == "3d") {
             return ModelType::MESH;
+        }
+    }
+    for (const auto& label : labels) {
+        if (label == "vision" || label == "reasoning" ||
+            label == "tool-calling" || label == "tools" ||
+            label == "chat-transcription") {
+            return ModelType::LLM;
         }
     }
     return ModelType::LLM;
