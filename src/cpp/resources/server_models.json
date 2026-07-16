@@ -1159,6 +1159,54 @@
         ],
         "size": 8.05
     },
+    "UNITE-Base-Qwen2-VL-2B-GGUF": {
+        "checkpoint": "friedrichor/Unite-Base-Qwen2-VL-2B:Q8_0",
+        "mmproj": "mmproj-Unite-Base-Qwen2-VL-2B-f16.gguf",
+        "recipe": "llamacpp",
+        "suggested": true,
+        "labels": [
+            "embeddings",
+            "vision"
+        ],
+        "size": 2.5,
+        "description": "UNITE (UNIversal mulTimodal Embedder) - unified text/image/video embeddings. Converts to GGUF via convert_hf_to_gguf.py (auto-remaps UniteQwen2VL -> qwen2vl)."
+    },
+    "UNITE-Base-Qwen2-VL-7B-GGUF": {
+        "checkpoint": "friedrichor/Unite-Base-Qwen2-VL-7B:Q8_0",
+        "mmproj": "mmproj-Unite-Base-Qwen2-VL-7B-f16.gguf",
+        "recipe": "llamacpp",
+        "suggested": true,
+        "labels": [
+            "embeddings",
+            "vision"
+        ],
+        "size": 7.8,
+        "description": "UNITE (UNIversal mulTimodal Embedder) - unified text/image/video embeddings. Converts to GGUF via convert_hf_to_gguf.py (auto-remaps UniteQwen2VL -> qwen2vl)."
+    },
+    "UNITE-Instruct-Qwen2-VL-2B-GGUF": {
+        "checkpoint": "friedrichor/Unite-Instruct-Qwen2-VL-2B:Q8_0",
+        "mmproj": "mmproj-Unite-Instruct-Qwen2-VL-2B-f16.gguf",
+        "recipe": "llamacpp",
+        "suggested": true,
+        "labels": [
+            "embeddings",
+            "vision"
+        ],
+        "size": 2.5,
+        "description": "UNITE-Instruct variant - instruction-based multimodal retrieval."
+    },
+    "UNITE-Instruct-Qwen2-VL-7B-GGUF": {
+        "checkpoint": "friedrichor/Unite-Instruct-Qwen2-VL-7B:Q8_0",
+        "mmproj": "mmproj-Unite-Instruct-Qwen2-VL-7B-f16.gguf",
+        "recipe": "llamacpp",
+        "suggested": true,
+        "labels": [
+            "embeddings",
+            "vision"
+        ],
+        "size": 7.8,
+        "description": "UNITE-Instruct variant - instruction-based multimodal retrieval."
+    },
     "bge-reranker-v2-m3-GGUF": {
         "checkpoint": "pqnet/bge-reranker-v2-m3-Q8_0-GGUF",
         "recipe": "llamacpp",
