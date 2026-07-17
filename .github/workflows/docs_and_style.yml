@@ -16,7 +16,7 @@ jobs:
       group: ${{ github.workflow }}-app-regression-${{ github.ref }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
@@ -37,7 +37,7 @@ jobs:
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - name: Install ccache
         run: sudo apt-get update && sudo apt-get install -y ccache
       - name: Cache compiler objects
@@ -61,7 +61,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:

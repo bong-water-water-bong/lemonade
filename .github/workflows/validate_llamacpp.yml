@@ -85,7 +85,7 @@ jobs:
       rocm_stable_available: ${{ steps.assets.outputs.rocm_stable_available }}
       cuda_available: ${{ steps.assets.outputs.cuda_available }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Fetch release asset lists
         env:
@@ -285,7 +285,7 @@ jobs:
     if: always() && !failure() && !cancelled()
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           clean: true
           fetch-depth: 0
@@ -405,7 +405,7 @@ jobs:
           # - backend: cuda
           #   runner: [self-hosted, Windows, 128gb, cuda]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           clean: true
 
@@ -528,7 +528,7 @@ jobs:
       needs.validate.result == 'success' &&
       needs.verify-release-assets.result == 'success'
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Download validation results
         uses: actions/download-artifact@v7
