@@ -33,7 +33,7 @@ jobs:
     outputs:
       unsigned-artifact-id: ${{ steps.upload-unsigned-msi.outputs.artifact-id }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           clean: true
           fetch-depth: 0
@@ -261,7 +261,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           clean: true
           fetch-depth: 0
@@ -352,7 +352,7 @@ jobs:
           set -e
           apt-get install -y -t trixie-backports libcpp-httplib-dev node-markdown-it-texmath
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           clean: true
           fetch-depth: 0
@@ -499,7 +499,7 @@ jobs:
     outputs:
       version: ${{ steps.get_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           clean: true
           fetch-depth: 0
@@ -561,7 +561,7 @@ jobs:
     env:
       HF_TOKEN: ${{ secrets.HUGGINGFACE_ACCESS_TOKEN }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           clean: true
           fetch-depth: 0
@@ -973,7 +973,7 @@ jobs:
     outputs:
       version: ${{ steps.get_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           clean: true
           fetch-depth: 0
@@ -1279,7 +1279,7 @@ jobs:
             Remove-LongPathTree (Join-Path $env:GITHUB_WORKSPACE "lemonade_server_install")
           }
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           clean: true
           fetch-depth: 0
@@ -1545,7 +1545,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
       LEMONADE_VERSION: ${{ needs.build-lemonade-deb.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Cleanup processes
         uses: ./.github/actions/cleanup-processes-linux
@@ -1921,7 +1921,7 @@ jobs:
       LEMONADE_VERSION: ${{ needs.build-lemonade-macos-dmg.outputs.version }}
       GGML_METAL_NO_RESIDENCY: "1"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Set HF_HOME environment variable
         run: echo "HF_HOME=$PWD/hf-cache" >> $GITHUB_ENV
@@ -2065,7 +2065,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
       LEMONADE_VERSION: ${{ needs.build-lemonade-deb.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Configure git safe directory
         run: git config --global --add safe.directory $(pwd)
@@ -2202,7 +2202,7 @@ jobs:
       PYTHONIOENCODING: utf-8
       GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Download build artifacts
         uses: actions/download-artifact@v7
@@ -2300,7 +2300,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
       LEMONADE_VERSION: ${{ needs.build-lemonade-macos-dmg.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       # ---- Windows Setup ----
       - name: Setup short Windows CI paths
@@ -2468,7 +2468,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
       LEMONADE_VERSION: ${{ needs.build-lemonade-deb.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Configure git safe directory
         run: git config --global --add safe.directory $(pwd)
@@ -2560,7 +2560,7 @@ jobs:
       PYTHONIOENCODING: utf-8
       GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Setup short Windows CI paths
         shell: powershell
@@ -2695,7 +2695,7 @@ jobs:
       LEMONADE_VERSION: ${{ needs.build-lemonade-rpm.outputs.version }}
     steps:
       - name: Checkout for release notes action
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           sparse-checkout: .github
 

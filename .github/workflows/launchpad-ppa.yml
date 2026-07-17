@@ -68,7 +68,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
@@ -150,7 +150,7 @@ jobs:
         run: add-apt-repository -y ${{ matrix.ppa }}
 
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
