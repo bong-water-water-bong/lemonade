@@ -67,7 +67,7 @@ jobs:
       cuda_update_backends: ${{ steps.assets.outputs.cuda_update_backends }}
       update_backends: ${{ steps.assets.outputs.update_backends }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Resolve release tags
         id: release
@@ -203,7 +203,7 @@ jobs:
     if: always() && !failure() && !cancelled()
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           clean: true
           fetch-depth: 0
@@ -279,7 +279,7 @@ jobs:
           #   channel: ""
           #   runner: [self-hosted, Windows, 128gb, cuda]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           clean: true
 
@@ -471,7 +471,7 @@ jobs:
       needs.validate.result == 'success' &&
       needs.verify-cuda-assets.result == 'success'
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Download validation evidence
         uses: actions/download-artifact@v7
