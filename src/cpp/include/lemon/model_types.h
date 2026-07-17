@@ -122,25 +122,30 @@ inline std::string device_type_to_string(DeviceType device) {
 //   "realtime-transcription" → model supports WebSocket /realtime streaming
 //   "chat-transcription"     → model accepts audio input in /chat/completions
 //
-// Resolution: chat-indicator labels win. The "transcription" label triggers
-// ModelType::TRANSCRIPTION only when no chat indicator is present (pure Whisper).
-// "chat-transcription" is an LLM input-modality label and does not change the
-// deployment mode.
+// Resolution (3 passes):
+//   1. Deployment-mode labels (embeddings, reranking, image, tts, …) win
+//      unconditionally — a multimodal embedding with both "embeddings" and
+//      "vision" must deploy as EMBEDDING, not LLM chat.
+//   2. LLM capability labels (vision, reasoning, tool-calling, …).  If any
+//      is present the model is an LLM chat model.  The "transcription" label
+//      does NOT override these (Gemma 4 any-to-text stays LLM).
+//   3. "transcription" fires only when no LLM capability label is present
+//      (pure Whisper / FLM ASR).
 inline ModelType get_model_type_from_labels(const std::vector<std::string>& labels) {
     // Capability labels (e.g., "vision", "reasoning") take lower priority than
     // deployment-mode labels like "embeddings" or "reranking".  A multimodal
     // embedding model such as UNITE carries both "embeddings" and "vision" — it
     // should be deployed as an EMBEDDING backend (which passes --embeddings to
     // llama-server), not as an LLM chat backend.
+    // Pass 1 — Deployment-mode labels that must never be overridden.
+    // A multimodal embedding model such as UNITE carries both "embeddings"
+    // and "vision" — it should be deployed as EMBEDDING, not LLM chat.
     for (const auto& label : labels) {
         if (label == "embeddings" || label == "embedding") {
             return ModelType::EMBEDDING;
         }
         if (label == "reranking") {
             return ModelType::RERANKING;
-        }
-        if (label == "transcription") {
-            return ModelType::TRANSCRIPTION;
         }
         if (label == "image") {
             return ModelType::IMAGE;
@@ -158,6 +163,11 @@ inline ModelType get_model_type_from_labels(const std::vector<std::string>& labe
             return ModelType::MESH;
         }
     }
+
+    // Pass 2 — LLM capability labels.  If any is present the model is an
+    // LLM chat model even if the "transcription" label is also present
+    // (e.g. Gemma 4 any-to-text: vision + reasoning + tool-calling +
+    // transcription → LLM, not TRANSCRIPTION).
     for (const auto& label : labels) {
         if (label == "vision" || label == "reasoning" ||
             label == "tool-calling" || label == "tools" ||
@@ -165,6 +175,16 @@ inline ModelType get_model_type_from_labels(const std::vector<std::string>& labe
             return ModelType::LLM;
         }
     }
+
+    // Pass 3 — "transcription" fires only when no LLM capability label
+    // is present (pure Whisper / FLM ASR models).
+    for (const auto& label : labels) {
+        if (label == "transcription") {
+            return ModelType::TRANSCRIPTION;
+        }
+    }
+
+
     return ModelType::LLM;
 }
 

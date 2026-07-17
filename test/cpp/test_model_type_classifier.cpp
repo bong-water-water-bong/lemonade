@@ -49,6 +49,15 @@ int main() {
          {"vision", "reasoning", "tool-calling", "transcription"},
          ModelType::LLM},
 
+        // Multimodal embedding model (e.g. UNITE) — both "embeddings" and "vision".
+        // Deployment-mode label must win; must be EMBEDDING, not LLM.
+        {"UNITE-style multimodal embedding",
+         {"vision", "embeddings"},
+         ModelType::EMBEDDING},
+        {"UNITE-style Instruct",
+         {"vision", "embeddings", "tool-calling"},
+         ModelType::EMBEDDING},
+
         // Fallbacks.
         {"empty labels → LLM", {}, ModelType::LLM},
         {"unknown label → LLM", {"some-future-label"}, ModelType::LLM},
