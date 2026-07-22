@@ -62,6 +62,12 @@
   "ryzenai": {
     "server_bin": "builtin"
   },
+  "vision": {
+    "args": ""
+  },
+  "kokoro": {
+    "cpu_bin": "builtin"
+  },
   "sdcpp": {
     "args": "",
     "backend": "auto",
