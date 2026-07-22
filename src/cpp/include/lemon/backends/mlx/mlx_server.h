@@ -1,0 +1,42 @@
+#pragma once
+
+#include "lemon/backends/backend_registry.h"
+
+#include "lemon/wrapped_server.h"
+#include "lemon/backends/backend_utils.h"
+#include <string>
+
+namespace lemon {
+namespace backends {
+
+class MlxServer : public WrappedServer {
+public:
+    static InstallParams get_install_params(const std::string& backend, const std::string& version);
+
+    explicit MlxServer(const std::string& log_level,
+                       ModelManager* model_manager,
+                       BackendManager* backend_manager);
+
+    ~MlxServer() override;
+
+    void load(const std::string& model_name,
+              const ModelInfo& model_info,
+              const RecipeOptions& options,
+              bool do_not_upgrade = false) override;
+
+    void unload() override;
+
+    // ICompletionServer implementation
+    json chat_completion(const json& request) override;
+    json completion(const json& request) override;
+    json responses(const json& request) override;
+};
+
+namespace mlx {
+// Factory for the mlx-engine backend (constructs the server class — lemond only).
+std::unique_ptr<WrappedServer> create(const BackendContext& ctx);
+const BackendSpec* spec();
+const BackendOps* ops();
+}  // namespace mlx
+}  // namespace backends
+}  // namespace lemon

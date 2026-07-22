@@ -1830,5 +1830,23 @@
             "classification"
         ],
         "size": 0.27
+    },
+    "Qwen3-0.6B-MLX": {
+        "checkpoint": "mlx-community/Qwen3-0.6B-4bit",
+        "recipe": "mlx-engine",
+        "suggested": true,
+        "labels": [
+            "reasoning"
+        ],
+        "size": 0.42
+    },
+    "Qwen3-4B-MLX": {
+        "checkpoint": "mlx-community/Qwen3-4B-4bit",
+        "recipe": "mlx-engine",
+        "suggested": false,
+        "labels": [
+            "reasoning"
+        ],
+        "size": 2.3
     }
 }
