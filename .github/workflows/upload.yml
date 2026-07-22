@@ -8,6 +8,10 @@ on:
       artifact:
         required: true
         type: string
+      allow_skip_without_gpg:
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,31 +22,61 @@ jobs:
 
     name: Upload to PPA
     steps:
+      - name: Check GPG key secret
+        id: gpg-secret
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          ALLOW_SKIP_WITHOUT_GPG: ${{ inputs.allow_skip_without_gpg }}
+        run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            if [ "$ALLOW_SKIP_WITHOUT_GPG" != "true" ]; then
+              echo "::error::GPG_PRIVATE_KEY is required for PPA upload to ${{ inputs.target }}."
+              exit 1
+            fi
+
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GPG_PRIVATE_KEY is not configured; skipping PPA upload to ${{ inputs.target }}."
+            exit 0
+          fi
+
+          echo "has_key=true" >> "$GITHUB_OUTPUT"
+
       - name: Download source package
+        if: steps.gpg-secret.outputs.has_key == 'true'
         uses: actions/download-artifact@v7
         with:
           name: ${{ inputs.artifact }}
 
       - name: Install dependencies
+        if: steps.gpg-secret.outputs.has_key == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y devscripts dput --no-install-recommends
 
       - name: Setup GPG key
+        if: steps.gpg-secret.outputs.has_key == 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
           echo "Setting up GPG key..."
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import --batch --yes
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --import --batch --yes
 
           # Get the key ID
           GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
+          if [ -z "$GPG_KEY_ID" ]; then
+            echo "::error::GPG_PRIVATE_KEY was configured but no secret key was imported."
+            exit 1
+          fi
           echo "GPG_KEY_ID=$GPG_KEY_ID" >> $GITHUB_ENV
 
       - name: Sign source package
+        if: steps.gpg-secret.outputs.has_key == 'true'
         run: |
           echo "Signing package with GPG key $GPG_KEY_ID..."
           debsign -k $GPG_KEY_ID *.changes
 
       - name: Upload to PPA
+        if: steps.gpg-secret.outputs.has_key == 'true'
         run: |
           echo "Uploading to ${{ inputs.target }}..."
           dput ${{ inputs.target }} *.changes
