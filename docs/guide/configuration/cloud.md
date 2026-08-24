@@ -48,6 +48,19 @@ lemonade cloud install fireworks \
 
 Runtime keys live in `lemond`'s process memory only — they're never written to disk and they vanish on restart. To make them survive a restart, switch to Option A.
 
+### Gateways with a non-standard auth header
+
+By default the key is sent as `Authorization: Bearer <key>`. Some gateways front an OpenAI-shaped API but expect a differently-named header, often with no prefix:
+
+```bash
+lemonade cloud install acme \
+  --base-url https://gateway.example.com/v1 \
+  --auth-header-name X-Api-Key \
+  --auth-header-prefix ""
+```
+
+Both settings persist per provider in `config.json` and apply to discovery and every forwarded request. `lemonade cloud list` prints the header when either value isn't the default. They are sticky: a later `cloud install` for the same provider that omits these flags keeps the configured header rather than reverting to `Authorization: Bearer`.
+
 ## Using cloud models
 
 Cloud-discovered models use a dot-namespaced name: `<provider>.<upstream-id>`. For example, after installing Fireworks you'll see entries like:
@@ -94,7 +107,7 @@ Env vars always win. If you `POST /v1/cloud/auth` while the env var is set, the 
 - **Public name** — `<provider>.<cleaned_upstream_id>` after stripping `accounts/<x>/models/` wrappers and deduplicating leading provider segments.
 - **Capability labels** — `vision`, `tool-calling`, `reasoning`, normalized from each provider's divergent metadata into Lemonade's shared vocabulary.
 - **Context window** — from `context_length`, when reported.
-- **Per-million-token cost** — USD per 1M input/output tokens, from OpenRouter (per-token × 1e6) or Together (per-1M), when reported. Used for display only — never affects routing.
+- **Per-million-token cost** — USD per 1M input/output tokens, from OpenRouter (per-token × 1e6) or Together (per-1M), when reported. Surfaced on `/v1/models` for display, and attached to `collection.router` decisions as illustrative `outputs.estimated_cost` (not a billing figure).
 
 Discovery runs at every cache build (server startup, install, auth) and is best-effort: an unreachable provider logs a warning and is skipped without blocking the rest of the catalog.
 

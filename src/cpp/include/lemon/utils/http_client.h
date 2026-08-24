@@ -135,7 +135,8 @@ public:
         const std::map<std::string, std::string>& headers = {},
         long timeout_seconds = 300,
         std::function<void(int status_code)> on_status = nullptr,
-        HttpSecurityPolicy policy = HttpSecurityPolicy::ExternalHttpsOnly);
+        HttpSecurityPolicy policy = HttpSecurityPolicy::ExternalHttpsOnly,
+        std::function<bool()> should_cancel = nullptr);
 
     // Download file to disk with automatic retry and resume support
     static DownloadResult download_file(const std::string& url,
@@ -206,6 +207,10 @@ inline ProgressCallback create_throttled_progress_callback(size_t resume_offset 
         return true;  // Always continue (console callback never cancels)
     };
 }
+
+// Global flag: set from signal handler to cancel in-progress model downloads.
+// Checked by the libcurl progress callback during transfer.
+extern std::atomic<bool> g_download_cancelled;
 
 } // namespace utils
 } // namespace lemon

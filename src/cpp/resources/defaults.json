@@ -7,9 +7,12 @@
     "vulkan_bin": "builtin"
   },
   "auto_check_model_updates": true,
+  "auto_update_models": false,
+  "broadcast": true,
   "cloud_providers": [],
   "config_version": 2,
   "ctx_size": -1,
+  "default_model_source": "huggingface",
   "disable_model_filtering": false,
   "enable_dgpu_gtt": false,
   "extra_models_dir": "",
@@ -46,7 +49,6 @@
     "cpu_args": "",
     "cpu_bin": "builtin"
   },
-  "no_broadcast": false,
   "no_fetch_executables": false,
   "offline": false,
   "onnxruntime": {
@@ -62,6 +64,7 @@
   },
   "port": 13305,
   "rocm_channel": "stable",
+  "rocm_install_method": "auto",
   "ryzenai": {
     "server_bin": "builtin"
   },
@@ -100,7 +103,18 @@
       ],
       "send_batch_size": 100
     },
+    "session": {
+      "headers": {
+        "client": [],
+        "id": []
+      }
+    },
     "trust_incoming_trace_context": false
+  },
+  "thenoise": {
+    "backend": "auto",
+    "lora_dir": "",
+    "upscaler_dir": ""
   },
   "thinksound": {
     "backend": "auto",
@@ -109,6 +123,7 @@
     "vulkan_bin": "builtin"
   },
   "trellis": {
+    "args": "",
     "backend": "auto",
     "cuda_bin": "builtin",
     "rocm_bin": "builtin",
