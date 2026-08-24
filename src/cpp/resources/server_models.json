@@ -2432,6 +2432,7 @@
         "recipe": "mlx-engine",
         "suggested": true,
         "labels": [
+            "chat",
             "reasoning"
         ],
         "size": 0.42
@@ -2441,6 +2442,7 @@
         "recipe": "mlx-engine",
         "suggested": false,
         "labels": [
+            "chat",
             "reasoning"
         ],
         "size": 2.3

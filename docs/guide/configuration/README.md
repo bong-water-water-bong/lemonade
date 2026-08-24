@@ -45,7 +45,6 @@ When `lemond` starts, effective configuration is resolved by deep-merging settin
     "vulkan_bin": "builtin"
   },
   "auto_check_model_updates": true,
-  "auto_update_models": false,
   "broadcast": true,
   "cloud_providers": [],
   "config_version": 2,

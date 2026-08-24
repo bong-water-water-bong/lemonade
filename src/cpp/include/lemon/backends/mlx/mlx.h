@@ -36,11 +36,20 @@ inline const BackendDescriptor descriptor = {
         {"cpu", {"linux", "macos"},
          {{"cpu", {"x86_64", "arm64"}}}, "CPU fallback"},
     },
-    /*default_labels*/ {},
+    /*supported_modes*/ {"chat"},
     /*required_checkpoints*/ {"main"},
-    /*modality*/ "Text generation",
-    /*experimental*/ true,
-    /*web_display_name*/ "MLX Engine (Apple Silicon)"
+    /*default_capabilities*/ {},
+    /*experimental*/    true,
+    /*web_display_name*/ "MLX Engine (Apple Silicon)",
+    /*rocm_channels*/   {},  // single rocm artifact, no stable/nightly channels
+    /*exposes_prometheus_metrics*/ false,
+    /*rocm_requires_cwsr_fix*/ false,
+    /*version_policy*/  VersionPolicy::Exact,
+    /*self_manages_downloads*/ false,
+    /*takes_args*/      false,  // config defaults stay {"backend": "auto"} (no bare args key)
+    /*arg_variants*/    {},
+    /*bin_variants*/    {},
+    /*config_extra*/    nlohmann::json::object(),
 };
 
 } // namespace mlx
