@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-08-28T02:58:19.982686+00:00",
+  "run_id": "32684792207",
+  "run_url": "https://github.com/bong-water-water-bong/lemonade/actions/runs/32684792207",
+  "repo": "bong-water-water-bong/lemonade",
+  "repo_url": "https://github.com/bong-water-water-bong/lemonade",
+  "actions_url": "https://github.com/bong-water-water-bong/lemonade/actions/workflows/benchmark-regression.yml",
+  "commit": "74b8883cfa7616eec4cc68c325feef6ec62a3d81",
+  "lemonade_version": null,
+  "by_model_scenario": {},
+  "history": {}
+}
