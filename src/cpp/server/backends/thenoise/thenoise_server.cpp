@@ -7,9 +7,12 @@
 #include "lemon/utils/process_manager.h"
 #include "lemon/error_types.h"
 #include "lemon/system_info.h"
-#include <lemon/utils/aixlog.hpp>
+#include "lemon/utils/aixlog.hpp"
+#include "lemon/utils/json_utils.h"
+#include "lemon/utils/path_utils.h"
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <random>
 #include <set>
 #include <sstream>
@@ -47,9 +50,7 @@ InstallParams TheNoiseServer::get_install_params(const std::string& backend, con
         throw std::runtime_error("TheNoise backend '" + backend + "' is not supported. Supported: rocm");
     }
 
-    // TheNoise publishes one portable bundle per GPU target (gfx1150 / gfx1151)
-    // under the same release tag. Pick the archive matching this host.
-    std::string target_arch = SystemInfo::get_rocm_arch();
+    std::string target_arch = SystemInfo::rocm_asset_family(SystemInfo::get_rocm_arch());
 
     InstallParams params;
     params.repo = "lemonade-sdk/thenoise";
@@ -378,16 +379,136 @@ json TheNoiseServer::image_generations(const json& request) {
     return {{"created", static_cast<long long>(std::time(nullptr))}, {"data", data}};
 }
 
-json TheNoiseServer::image_edits(const json& /* request */) {
-    return ErrorResponse::from_exception(
-        UnsupportedOperationException("Image editing", "thenoise (text-to-image only)")
-    );
+json TheNoiseServer::image_edits(const json& request) {
+    int n = request.value("n", 1);
+    if (n < 1) n = 1;
+
+    json data = json::array();
+    for (int i = 0; i < n; ++i) {
+        json body = build_request(request);
+        body["out"] = "json";
+
+        if (request.contains("image_data") && !request["image_data"].is_null()) {
+            body["image"] = request["image_data"];
+        }
+        body.erase("image_data");
+        body.erase("image_filename");
+
+        LOG(DEBUG, "TheNoise") << "Forwarding image edit to thenoise: " << body.dump(2) << std::endl;
+
+        json resp = forward_request("/edit", body);
+
+        if (!resp.contains("b64_json")) {
+            LOG(ERROR, "TheNoise") << "thenoise image edit failed: " << resp.dump() << std::endl;
+            return ErrorResponse::from_exception(
+                BackendException("thenoise", "image edit returned no b64_json: " + resp.dump())
+            );
+        }
+
+        data.push_back(resp);
+    }
+
+    return {{"created", static_cast<long long>(std::time(nullptr))}, {"data", data}};
 }
 
 json TheNoiseServer::image_variations(const json& /* request */) {
     return ErrorResponse::from_exception(
-        UnsupportedOperationException("Image variations", "thenoise (text-to-image only)")
+        UnsupportedOperationException("Image variations", "thenoise")
     );
+}
+
+std::string TheNoiseServer::upscale_via_cli(
+    const std::string& b64_image,
+    const std::string& upscale_model_path) {
+
+    //ROCm is currently the only available backend. If other backends are added this needs to be parameterized accordingly.
+    std::string exe_path = BackendUtils::get_backend_binary_path(*thenoise::spec(), "rocm");
+
+    if (!fs::exists(exe_path)) {
+        LOG(ERROR, "TheNoise") << "thenoise binary not found at: " << exe_path << std::endl;
+        return "";
+    }
+
+    std::string raw = JsonUtils::base64_decode(b64_image);
+
+    fs::path runtime_base = path_from_utf8(get_runtime_dir());
+    std::random_device rd;
+    std::uniform_int_distribution<unsigned int> dis(0, 0xFFFFFF);
+
+    fs::path temp_dir;
+    std::error_code ec;
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        auto nonce = static_cast<unsigned long long>(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+        std::ostringstream suffix;
+        suffix << "thenoise-upscale-" << nonce << "-" << std::hex << dis(rd);
+        fs::path candidate = runtime_base / suffix.str();
+
+        ec.clear();
+        if (fs::create_directory(candidate, ec)) {
+            temp_dir = candidate;
+            break;
+        }
+    }
+
+    if (temp_dir.empty()) {
+        LOG(ERROR, "TheNoise") << "Failed to create temporary directory for upscale" << std::endl;
+        return "";
+    }
+
+    fs::path input_path = temp_dir / "input.png";
+    fs::path output_path = temp_dir / "output.png";
+
+    struct TempFileGuard {
+        fs::path path;
+        bool recursive = false;
+        ~TempFileGuard() {
+            std::error_code ec;
+            if (recursive) {
+                fs::remove_all(path, ec);
+            } else {
+                fs::remove(path, ec);
+            }
+        }
+    };
+    TempFileGuard dir_guard{temp_dir, true};
+    TempFileGuard input_guard{input_path};
+    TempFileGuard output_guard{output_path};
+
+    {
+        std::ofstream out(input_path, std::ios::binary);
+        out.write(raw.data(), raw.size());
+    }
+
+    std::vector<std::string> args = {
+        "upscale",
+        "--pixel-upscaler", upscale_model_path,
+        "--input", input_path.string(),
+        "--out", output_path.string()
+    };
+
+    std::vector<std::pair<std::string, std::string>> env_vars;
+    auto proc = ProcessManager::start_process(
+        exe_path, args, "", true, false, env_vars);
+
+    int exit_code = ProcessManager::wait_for_exit(proc, 300);
+
+    std::string result;
+    if (exit_code == 0 && fs::exists(output_path)) {
+        std::ifstream in(output_path, std::ios::binary);
+        std::string upscaled_data(
+            (std::istreambuf_iterator<char>(in)),
+            std::istreambuf_iterator<char>());
+        result = JsonUtils::base64_encode(upscaled_data);
+        LOG(INFO, "TheNoise") << "Upscale complete ("
+            << raw.size() << " -> " << upscaled_data.size() << " bytes)" << std::endl;
+    } else {
+        LOG(WARNING, "TheNoise") << "Upscale failed (exit code: "
+            << exit_code << ", model: " << upscale_model_path
+            << ", cli: " << exe_path << ")" << std::endl;
+    }
+
+    return result;
 }
 
 } // namespace backends
